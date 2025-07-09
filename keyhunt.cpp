@@ -124,7 +124,7 @@ int minikey_n_limit;
 	
 const char *version = "0.2.230519 Satoshi Quest";
 
-#define CPU_GRP_SIZE 1024
+#define CPU_GRP_SIZE 2048
 
 std::vector<Point> Gn;
 Point _2Gn;

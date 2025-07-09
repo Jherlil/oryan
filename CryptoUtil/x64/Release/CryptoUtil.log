@@ -1,0 +1,5 @@
+﻿  hash.cpp
+  ripemd160.cpp
+  Rng.cpp
+  sha256.cpp
+  CryptoUtil.vcxproj -> C:\Users\WINDOWS\BitCrack\x64\Release\CryptoUtil.lib
