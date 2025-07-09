@@ -18,14 +18,19 @@ email: albertobsd@gmail.com
 #include "sha3/sha3.h"
 #include "util.h"
 
-#include "secp256k1/SECP256k1.h"
-#include "secp256k1/Point.h"
-#include "secp256k1/Int.h"
-#include "secp256k1/IntGroup.h"
-#include "secp256k1/Random.h"
+#include "gmp256k1/GMP256K1.h"
+#include "gmp256k1/Point.h"
+#include "gmp256k1/Int.h"
+#include "gmp256k1/IntGroup.h"
+#include "gmp256k1/Random.h"
 
-#include "hash/sha256.h"
-#include "hash/ripemd160.h"
+#include "hash/flo-shani.h"
+#include "CryptoUtil/CryptoUtil.h"
+#include "hashing.h"
+
+#ifdef __linux__
+#include <malloc.h>
+#endif
 
 #include <unistd.h>
 #include <pthread.h>
@@ -284,6 +289,9 @@ Secp256K1 *secp;
 
 int main(int argc, char **argv)	{
 	// File pointers
+#ifdef __linux__
+    mallopt(M_MMAP_THRESHOLD, 0);
+#endif
 	FILE *fd_aux1, *fd_aux2, *fd_aux3;
 
 	// Strings

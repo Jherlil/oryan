@@ -1,57 +1,25 @@
-#include <openssl/evp.h>
-#include <openssl/sha.h>
-#include <openssl/ripemd.h>
+#include "hash/flo-shani.h"
+#include "CryptoUtil/CryptoUtil.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "hashing.h"
 #include "sha3/sha3.h"
 
 int sha256(const unsigned char *data, size_t length, unsigned char *digest) {
-    SHA256_CTX ctx;
-    if (SHA256_Init(&ctx) != 1) {
-        printf("Failed to initialize SHA256 context\n");
-        return 1;
-    }
-    if (SHA256_Update(&ctx, data, length) != 1) {
-        printf("Failed to update digest\n");
-        return 1;
-    }
-    if (SHA256_Final(digest, &ctx) != 1) {
-        printf("Failed to finalize digest\n");
-        return 1;
-    }
-    return 0; // Success
+    sha256_update_shani(data, length, digest);
+    return 0;
 }
 
 int sha256_4(size_t length, const unsigned char *data0, const unsigned char *data1,
              const unsigned char *data2, const unsigned char *data3,
              unsigned char *digest0, unsigned char *digest1,
              unsigned char *digest2, unsigned char *digest3) {
-    SHA256_CTX ctx[4];
-    
-    if (SHA256_Init(&ctx[0]) != 1 || SHA256_Init(&ctx[1]) != 1 ||
-        SHA256_Init(&ctx[2]) != 1 || SHA256_Init(&ctx[3]) != 1) {
-        printf("Failed to initialize SHA256 contexts\n");
-        return 1;
-    }
-    
-    if (SHA256_Update(&ctx[0], data0, length) != 1 ||
-        SHA256_Update(&ctx[1], data1, length) != 1 ||
-        SHA256_Update(&ctx[2], data2, length) != 1 ||
-        SHA256_Update(&ctx[3], data3, length) != 1) {
-        printf("Failed to update digests\n");
-        return 1;
-    }
-    
-    if (SHA256_Final(digest0, &ctx[0]) != 1 ||
-        SHA256_Final(digest1, &ctx[1]) != 1 ||
-        SHA256_Final(digest2, &ctx[2]) != 1 ||
-        SHA256_Final(digest3, &ctx[3]) != 1) {
-        printf("Failed to finalize digests\n");
-        return 1;
-    }
-    
-    return 0; // Success
+    unsigned char *msgs[4] = {(unsigned char*)data0, (unsigned char*)data1,
+                              (unsigned char*)data2, (unsigned char*)data3};
+    unsigned char *digests[4] = {digest0, digest1, digest2, digest3};
+    sha256_x4_update_shani_4x(msgs, length, digests);
+    return 0;
 }
 
 // Function for hashing
@@ -66,84 +34,78 @@ int keccak(const unsigned char *data, size_t length, unsigned char *digest) {
 
 
 int rmd160(const unsigned char *data, size_t length, unsigned char *digest) {
-    RIPEMD160_CTX ctx;
-    if (RIPEMD160_Init(&ctx) != 1) {
-        printf("Failed to initialize RIPEMD-160 context\n");
+    if (length > 55) {
+        // Implementation only supports up to one block
         return 1;
     }
-    if (RIPEMD160_Update(&ctx, data, length) != 1) {
-        printf("Failed to update digest\n");
-        return 1;
+
+    unsigned int msg[16] = {0};
+    unsigned int temp[5];
+
+    for (size_t i = 0; i < length; ++i) {
+        msg[i / 4] |= (unsigned int)data[i] << ((i % 4) * 8);
     }
-    if (RIPEMD160_Final(digest, &ctx) != 1) {
-        printf("Failed to finalize digest\n");
-        return 1;
+
+    msg[length / 4] |= 0x80U << ((length % 4) * 8);
+    msg[14] = (unsigned int)(length * 8);
+
+    crypto::ripemd160(msg, temp);
+
+    for (int i = 0; i < 5; ++i) {
+        unsigned int w = temp[i];
+        digest[i * 4]     = (unsigned char)(w >> 24);
+        digest[i * 4 + 1] = (unsigned char)(w >> 16);
+        digest[i * 4 + 2] = (unsigned char)(w >> 8);
+        digest[i * 4 + 3] = (unsigned char)w;
     }
-    return 0; // Success
+
+    return 0;
 }
 
 int rmd160_4(size_t length, const unsigned char *data0, const unsigned char *data1,
                 const unsigned char *data2, const unsigned char *data3,
                 unsigned char *digest0, unsigned char *digest1,
                 unsigned char *digest2, unsigned char *digest3) {
-    RIPEMD160_CTX ctx[4];
-    
-    if (RIPEMD160_Init(&ctx[0]) != 1 || RIPEMD160_Init(&ctx[1]) != 1 ||
-        RIPEMD160_Init(&ctx[2]) != 1 || RIPEMD160_Init(&ctx[3]) != 1) {
-        printf("Failed to initialize RIPEMD-160 contexts\n");
-        return 1;
-    }
-    
-    if (RIPEMD160_Update(&ctx[0], data0, length) != 1 ||
-        RIPEMD160_Update(&ctx[1], data1, length) != 1 ||
-        RIPEMD160_Update(&ctx[2], data2, length) != 1 ||
-        RIPEMD160_Update(&ctx[3], data3, length) != 1) {
-        printf("Failed to update digests\n");
-        return 1;
-    }
-    
-    if (RIPEMD160_Final(digest0, &ctx[0]) != 1 ||
-        RIPEMD160_Final(digest1, &ctx[1]) != 1 ||
-        RIPEMD160_Final(digest2, &ctx[2]) != 1 ||
-        RIPEMD160_Final(digest3, &ctx[3]) != 1) {
-        printf("Failed to finalize digests\n");
-        return 1;
-    }
-    
-    return 0; // Success
+    if (rmd160(data0, length, digest0)) return 1;
+    if (rmd160(data1, length, digest1)) return 1;
+    if (rmd160(data2, length, digest2)) return 1;
+    if (rmd160(data3, length, digest3)) return 1;
+    return 0;
 }
-
-bool sha256_file(const char* file_name, uint8_t* digest) {
+bool sha256_file(const char* file_name, uint8_t* digest) {
     FILE* file = fopen(file_name, "rb");
     if (file == NULL) {
         printf("Failed to open file: %s\n", file_name);
         return false;
     }
-    
-    uint8_t buffer[8192]; // Buffer to read file contents
-    size_t bytes_read;
-    
-    SHA256_CTX ctx;
-    if (SHA256_Init(&ctx) != 1) {
-        printf("Failed to initialize SHA256 context\n");
+
+    fseek(file, 0, SEEK_END);
+    long size = ftell(file);
+    if (size < 0) {
         fclose(file);
         return false;
     }
-    
-    while ((bytes_read = fread(buffer, 1, sizeof(buffer), file)) > 0) {
-        if (SHA256_Update(&ctx, buffer, bytes_read) != 1) {
-            printf("Failed to update digest\n");
-            fclose(file);
-            return false;
-        }
-    }
-    
-    if (SHA256_Final(digest, &ctx) != 1) {
-        printf("Failed to finalize digest\n");
+    rewind(file);
+
+    uint8_t *buffer = (uint8_t*)malloc(size);
+    if (!buffer) {
         fclose(file);
         return false;
     }
-    
+
+    if (fread(buffer, 1, size, file) != (size_t)size) {
+        free(buffer);
+        fclose(file);
+        return false;
+    }
+
+    sha256_update_shani(buffer, (size_t)size, digest);
+
+    free(buffer);
     fclose(file);
     return true;
+}
+
+void rseed(unsigned long seed) {
+    srand((unsigned int)seed);
 }

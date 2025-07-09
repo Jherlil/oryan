@@ -62,6 +62,7 @@ Please install on your system
 
 - git
 - build-essential
+- libjemalloc-dev
 
 for legacy version also you are going to need:
 
